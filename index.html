@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>快递驿站货架管理</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div id="app">
+        <header class="game-header">
+            <h1>🏪 快递驿站货架管理</h1>
+            <div class="stats">
+                <div class="stat-item">
+                    <span class="stat-label">分数</span>
+                    <span id="score" class="stat-value">0</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">关卡</span>
+                    <span id="level" class="stat-value">1</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">积压包裹</span>
+                    <span id="backlog" class="stat-value">0</span>
+                </div>
+                <div class="stat-item timer" id="timer-container" style="display:none;">
+                    <span class="stat-label">剩余时间</span>
+                    <span id="timer" class="stat-value">30</span>
+                </div>
+            </div>
+        </header>
+
+        <div class="mode-switcher">
+            <button id="btn-setup" class="mode-btn active">⚙️ 设置</button>
+            <button id="btn-storage" class="mode-btn">📦 上架模式</button>
+            <button id="btn-pickup" class="mode-btn">🔍 取件模式</button>
+        </div>
+
+        <section id="setup-panel" class="panel">
+            <h2>货架布局设置</h2>
+            <div class="setup-grid">
+                <div class="setup-item">
+                    <label>货架编号（手机尾号分区）</label>
+                    <input type="number" id="shelf-count" value="10" min="2" max="20">
+                    <small>对应手机尾号 0 ~ N-1</small>
+                </div>
+                <div class="setup-item">
+                    <label>每层格子数</label>
+                    <input type="number" id="cols" value="4" min="2" max="8">
+                </div>
+                <div class="setup-item">
+                    <label>货架层数</label>
+                    <input type="number" id="rows" value="3" min="1" max="6">
+                </div>
+                <div class="setup-item">
+                    <label>初始包裹数</label>
+                    <input type="number" id="init-packages" value="8" min="3" max="30">
+                </div>
+            </div>
+            <button id="btn-start" class="primary-btn">🚀 开始游戏</button>
+        </section>
+
+        <section id="storage-panel" class="panel" style="display:none;">
+            <div class="storage-layout">
+                <div class="packages-area">
+                    <h3>待上架包裹</h3>
+                    <div id="pending-packages" class="pending-list"></div>
+                    <div class="hint">💡 提示：按包裹尾号拖到对应编号货架，注意尺寸大小</div>
+                </div>
+                <div class="shelves-area">
+                    <h3>货架区</h3>
+                    <div id="shelves-container" class="shelves"></div>
+                </div>
+            </div>
+            <div class="action-bar">
+                <button id="btn-finish-storage" class="primary-btn">完成上架，进入取件 →</button>
+                <button id="btn-new-package" class="secondary-btn">+ 随机生成新包裹</button>
+            </div>
+        </section>
+
+        <section id="pickup-panel" class="panel" style="display:none;">
+            <div class="pickup-layout">
+                <div class="pickup-sidebar">
+                    <h3>取件查询</h3>
+                    <div class="search-box">
+                        <input type="text" id="search-tail" placeholder="输入手机尾号（如 88）" maxlength="2">
+                        <button id="btn-search" class="primary-btn">🔍 查询</button>
+                    </div>
+                    <div id="search-result" class="search-result"></div>
+                    <h3 style="margin-top:20px;">本关待取列表</h3>
+                    <div id="task-list" class="task-list"></div>
+                </div>
+                <div class="shelves-area">
+                    <h3>点击货架取件</h3>
+                    <div id="pickup-shelves" class="shelves"></div>
+                </div>
+            </div>
+            <div id="round-result" class="round-result" style="display:none;"></div>
+        </section>
+
+        <div id="toast" class="toast"></div>
+    </div>
+
+    <script src="game.js"></script>
+</body>
+</html>
