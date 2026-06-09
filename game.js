@@ -16,6 +16,8 @@ const GameState = {
   pickupTimeLeft: 0,
   pickedThisRound: 0,
   totalThisRound: 0,
+  currentSearchTail: null,
+  isScanning: false,
 };
 
 const SIZE_CONFIG = {
@@ -345,6 +347,8 @@ function enterPickupMode() {
   GameState.pickedThisRound = 0;
   GameState.totalThisRound = taskCount;
   GameState.pickupTimeLeft = Math.max(15, taskCount * 4 - GameState.level * 2);
+  GameState.currentSearchTail = null;
+  GameState.isScanning = false;
 
   switchMode("pickup");
   renderTaskList();
@@ -352,7 +356,8 @@ function enterPickupMode() {
   attachPickupHandlers();
   startTimer();
   document.getElementById("search-result").innerHTML =
-    '<div class="empty-state">输入手机尾号查询</div>';
+    '<div class="empty-state">👆 请先输入手机尾号查询包裹位置</div>';
+  document.getElementById("search-tail").value = "";
   document.getElementById("round-result").style.display = "none";
 }
 
@@ -381,6 +386,8 @@ function attachPickupHandlers() {
 }
 
 function handlePickupClick(e) {
+  if (GameState.isScanning) return;
+
   const cellEl = e.currentTarget;
   const shelfId = parseInt(cellEl.dataset.shelf);
   const row = parseInt(cellEl.dataset.row);
@@ -389,6 +396,26 @@ function handlePickupClick(e) {
   const pkg = GameState.shelves[shelfId].cells[row][col];
   if (!pkg) return;
 
+  if (!GameState.currentSearchTail) {
+    cellEl.classList.add("wrong");
+    setTimeout(() => cellEl.classList.remove("wrong"), 500);
+    showToast("⚠️ 请先在左侧输入手机尾号查询", "warning", 1800);
+    return;
+  }
+
+  if (pkg.tail !== GameState.currentSearchTail) {
+    cellEl.classList.add("wrong");
+    setTimeout(() => cellEl.classList.remove("wrong"), 500);
+    showToast(
+      `❌ 尾号不匹配！当前查询尾号：${GameState.currentSearchTail}，该包裹尾号：${pkg.tail}`,
+      "error",
+      2000,
+    );
+    GameState.score -= 3;
+    updateStats();
+    return;
+  }
+
   const taskIdx = GameState.pickupTasks.findIndex(
     (t) => t.id === pkg.id && !t.done,
   );
@@ -396,30 +423,48 @@ function handlePickupClick(e) {
   if (taskIdx === -1) {
     cellEl.classList.add("wrong");
     setTimeout(() => cellEl.classList.remove("wrong"), 500);
+    showToast("❌ 这个包裹不在本关取件列表中", "error", 1500);
     GameState.score -= 5;
     updateStats();
-    showToast("❌ 这个包裹不在取件列表中！-5分", "error", 1200);
     return;
   }
 
-  GameState.pickupTasks[taskIdx].done = true;
-  GameState.shelves[shelfId].cells[row][col] = null;
-  GameState.pickedThisRound++;
-  GameState.score += 15;
-  updateStats();
+  GameState.isScanning = true;
+  cellEl.classList.add("scanning");
 
-  showToast(
-    `✅ 出库成功！+15分 (${GameState.pickedThisRound}/${GameState.totalThisRound})`,
-    "success",
-    1000,
-  );
-  renderTaskList();
-  renderShelves("pickup-shelves", false);
-  attachPickupHandlers();
+  showToast("📷 正在扫码出库...", "info", 900);
 
-  if (GameState.pickedThisRound >= GameState.totalThisRound) {
-    finishPickupRound(true);
-  }
+  setTimeout(() => {
+    cellEl.classList.remove("scanning");
+    cellEl.classList.add("scan-success");
+
+    GameState.pickupTasks[taskIdx].done = true;
+    GameState.shelves[shelfId].cells[row][col] = null;
+    GameState.pickedThisRound++;
+    GameState.score += 15;
+    GameState.isScanning = false;
+    updateStats();
+
+    showToast(
+      `✅ 扫码出库成功！+15分 (${GameState.pickedThisRound}/${GameState.totalThisRound})`,
+      "success",
+      1200,
+    );
+
+    setTimeout(() => {
+      renderTaskList();
+      renderShelves("pickup-shelves", false);
+      attachPickupHandlers();
+
+      if (GameState.currentSearchTail) {
+        searchByTail();
+      }
+
+      if (GameState.pickedThisRound >= GameState.totalThisRound) {
+        finishPickupRound(true);
+      }
+    }, 400);
+  }, 900);
 }
 
 function startTimer() {
@@ -449,18 +494,18 @@ function finishPickupRound(completed) {
     clearInterval(GameState.pickupTimer);
     GameState.pickupTimer = null;
   }
+  GameState.isScanning = false;
 
   const remaining = GameState.totalThisRound - GameState.pickedThisRound;
   const timeBonus = completed ? GameState.pickupTimeLeft * 2 : 0;
   const missedPenalty = remaining * 20;
-  const roundScore = GameState.pickedThisRound * 15 + timeBonus - missedPenalty;
 
   GameState.score += timeBonus - (completed ? 0 : missedPenalty);
   GameState.backlog += remaining;
 
-  if (remaining > 0) {
-    const notDone = GameState.pickupTasks.filter((t) => !t.done);
-    notDone.forEach((task) => {
+  const notDoneTasks = GameState.pickupTasks.filter((t) => !t.done);
+  if (notDoneTasks.length > 0) {
+    notDoneTasks.forEach((task) => {
       if (task.shelfIndex !== null && task.row !== null && task.col !== null) {
         GameState.shelves[task.shelfIndex].cells[task.row][task.col] = null;
       }
@@ -470,6 +515,27 @@ function finishPickupRound(completed) {
   updateStats();
 
   const resultEl = document.getElementById("round-result");
+
+  const backlogListHtml =
+    notDoneTasks.length > 0
+      ? `
+        <div style="margin-top:16px; text-align:left; background:#fff; padding:12px; border-radius:8px;">
+          <div style="font-size:14px; font-weight:bold; color:#d32f2f; margin-bottom:8px;">
+            📦 以下 ${notDoneTasks.length} 个包裹超时未取，计入积压：
+          </div>
+          ${notDoneTasks
+            .map(
+              (t) => `
+            <div style="font-size:12px; color:#666; padding:4px 0; border-bottom:1px dashed #eee;">
+              ${t.id} · 尾号 ${t.tail} · ${SIZE_CONFIG[t.size].label}号
+            </div>
+          `,
+            )
+            .join("")}
+        </div>
+      `
+      : "";
+
   resultEl.innerHTML = `
         <h3>${completed ? "🎉 本关完成！" : "⏰ 时间到！"}</h3>
         <div class="score-breakdown">
@@ -479,25 +545,30 @@ function finishPickupRound(completed) {
             </div>
             <div class="score-item">
                 <div class="label">取件得分</div>
-                <div class="value">+${GameState.pickedThisRound * 15}</div>
+                <div class="value" style="color:#4CAF50;">+${GameState.pickedThisRound * 15}</div>
             </div>
             ${
               completed
                 ? `
             <div class="score-item">
                 <div class="label">时间奖励</div>
-                <div class="value">+${timeBonus}</div>
+                <div class="value" style="color:#2196F3;">+${timeBonus}</div>
             </div>
             `
                 : `
             <div class="score-item">
-                <div class="label">超时积压</div>
+                <div class="label">超时积压扣分</div>
                 <div class="value" style="color:#f44336;">-${missedPenalty}</div>
+            </div>
+            <div class="score-item">
+                <div class="label">累计积压</div>
+                <div class="value" style="color:#FF9800;">${GameState.backlog}</div>
             </div>
             `
             }
         </div>
-        <p>当前总分：<strong style="font-size:20px;color:#f5576c;">${GameState.score}</strong></p>
+        ${backlogListHtml}
+        <p style="margin-top:16px;">当前总分：<strong style="font-size:24px;color:#f5576c;">${GameState.score}</strong></p>
         <button class="primary-btn" onclick="nextLevel()">🚀 进入下一关</button>
     `;
   resultEl.style.display = "block";
@@ -527,6 +598,8 @@ function searchByTail() {
 
   if (!tailInput || tailInput.length === 0) {
     resultEl.innerHTML = '<div class="empty-state">请输入手机尾号</div>';
+    GameState.currentSearchTail = null;
+    clearHighlights();
     return;
   }
 
@@ -534,50 +607,70 @@ function searchByTail() {
   const tailDigit = parseInt(normalizedTail) % GameState.config.shelfCount;
   const searchTail = String(tailDigit).padStart(2, "0");
 
+  GameState.currentSearchTail = searchTail;
+
   const matches = [];
   GameState.shelves.forEach((shelf) => {
     shelf.cells.forEach((row, rIdx) => {
       row.forEach((cell, cIdx) => {
         if (cell && cell.tail === searchTail) {
+          const isTask = GameState.pickupTasks.some(
+            (t) => t.id === cell.id && !t.done,
+          );
           matches.push({
             ...cell,
             shelfLabel: shelf.label,
             rowLabel: rIdx + 1,
             colLabel: cIdx + 1,
+            isPickupTask: isTask,
           });
         }
       });
     });
   });
 
-  document.querySelectorAll("#pickup-shelves .cell").forEach((c) => {
-    c.classList.remove("pickup-target");
-  });
+  clearHighlights();
 
   if (matches.length === 0) {
     resultEl.innerHTML = `<div class="empty-state">未找到尾号 ${searchTail} 的包裹</div>`;
     return;
   }
 
+  const taskMatches = matches.filter((m) => m.isPickupTask);
+
   resultEl.innerHTML = `
-        <div style="margin-bottom:8px;font-size:13px;color:#666;">找到 ${matches.length} 个尾号 ${searchTail} 的包裹：</div>
+        <div style="margin-bottom:8px;font-size:13px;color:#666;">
+          找到 ${matches.length} 个尾号 ${searchTail} 的包裹
+          ${taskMatches.length > 0 ? `<span style="color:#4CAF50;">（${taskMatches.length} 个待取件）</span>` : ""}
+        </div>
         ${matches
           .map(
             (m) => `
-            <div class="result-item">
-                <span>📦 ${m.id} (${SIZE_CONFIG[m.size].label})</span>
+            <div class="result-item ${m.isPickupTask ? "pickup-match" : ""}">
+                <span>
+                  ${m.isPickupTask ? "🎯" : "📦"} ${m.id} (${SIZE_CONFIG[m.size].label})
+                </span>
                 <span class="result-location">${m.shelfLabel}号·${m.rowLabel}层·${m.colLabel}格</span>
             </div>
         `,
           )
           .join("")}
+        <div style="margin-top:10px;font-size:12px;color:#888;">💡 点击货架上闪烁的包裹进行扫码出库</div>
     `;
 
   matches.forEach((m) => {
     const cellEl = document.querySelector(
       `#pickup-shelves .cell[data-shelf="${m.shelfIndex}"][data-row="${m.row}"][data-col="${m.col}"]`,
     );
-    if (cellEl) cellEl.classList.add("pickup-target");
+    if (cellEl) {
+      cellEl.classList.add(m.isPickupTask ? "pickup-target" : "search-match");
+    }
+  });
+}
+
+function clearHighlights() {
+  document.querySelectorAll("#pickup-shelves .cell").forEach((c) => {
+    c.classList.remove("pickup-target", "search-match");
   });
 }
 

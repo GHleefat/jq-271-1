@@ -331,6 +331,78 @@ body {
   animation: pulse 1s infinite;
 }
 
+.cell.search-match {
+  border-color: #2196f3;
+  background: #e3f2fd;
+}
+
+.cell.scanning {
+  position: relative;
+  overflow: hidden;
+  border-color: #ff9800 !important;
+  background: #fff3e0 !important;
+}
+
+.cell.scanning::after {
+  content: "";
+  position: absolute;
+  top: 0;
+  left: 0;
+  right: 0;
+  height: 3px;
+  background: linear-gradient(90deg, transparent, #ff5722, transparent);
+  animation: scan-line 0.9s linear infinite;
+  box-shadow: 0 0 10px #ff5722;
+}
+
+.cell.scanning::before {
+  content: "📷";
+  position: absolute;
+  z-index: 10;
+  font-size: 24px;
+  animation: blink 0.3s infinite;
+}
+
+.cell.scan-success {
+  border-color: #4caf50 !important;
+  background: #c8e6c9 !important;
+  animation: success-flash 0.4s ease-out;
+}
+
+@keyframes scan-line {
+  0% {
+    top: 0;
+  }
+  50% {
+    top: 100%;
+  }
+  100% {
+    top: 0;
+  }
+}
+
+@keyframes blink {
+  0%,
+  100% {
+    opacity: 1;
+  }
+  50% {
+    opacity: 0.5;
+  }
+}
+
+@keyframes success-flash {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.15);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+
 .cell.wrong {
   animation: shake 0.4s;
   border-color: #f44336 !important;
@@ -454,6 +526,12 @@ body {
 
 .result-item:last-child {
   margin-bottom: 0;
+}
+
+.result-item.pickup-match {
+  background: #e8f5e9;
+  border-left: 4px solid #4caf50;
+  font-weight: 500;
 }
 
 .result-location {
